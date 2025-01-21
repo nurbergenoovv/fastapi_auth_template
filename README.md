@@ -38,7 +38,7 @@
 
 1. **Клонировать** репозиторий:
    ```bash
-   git clone https://github.com/USERNAME/fastapi-auth-template.git
+   git clone https://github.com/nurbergenoovv/fastapi-auth-template.git
    cd fastapi-auth-template
    ```
 2. Создать виртуальное окружение и активировать его (пример для macOS/Linux):

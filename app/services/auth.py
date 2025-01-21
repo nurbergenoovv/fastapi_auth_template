@@ -1,7 +1,8 @@
+import logging
 import random
 import string
 
-from fastapi import HTTPException, Response, Request
+from fastapi import HTTPException, Response, Request, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.auth import UserCreate, UserLogin, UserSchema, ForgetPasswordRequest, ResetPasswordRequest, UserUpdate
@@ -10,6 +11,9 @@ from app.utils.config import JWT_SECRET_KEY
 from app.utils.repository import AbstractRepository
 from authx import AuthX, AuthXConfig, RequestToken
 
+
+logger = logging.getLogger(__name__)
+logger.name = "Auth-Service"
 
 def verify_password(plain_password, hashed_password):
     from passlib.context import CryptContext
@@ -94,18 +98,21 @@ class AuthService:
             "last_name": payload['last_name'],
         }
 
-    async def forgot_pass(self, crds: ForgetPasswordRequest):
+    async def forgot_pass(self, crds: ForgetPasswordRequest, backgroundTask: BackgroundTasks):
         email = crds.email
-        user: UserSchema = await self.users_repo.find_one(email=email)
+        user = await self.users_repo.find_one(email=email)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
         token = create_token()
         stmt = await self.users_repo.update_one(obj_id=user.id, data={"reset_token": token})
-        mail = await send_new_pass(email=user.email, token=token)
-        if not stmt or not mail:
+
+        if not stmt:
             return {"message": "Internal server error"}
-        return {"message": "Token created and message sended to email"}
+
+        backgroundTask.add_task(send_new_pass, email, token)
+
+        return {"message": "Token created and message sent to email"}
 
     async def reset_password(self, crds: ResetPasswordRequest):
         token = crds.token
@@ -139,3 +146,20 @@ class AuthService:
         response.set_cookie(auth.config.JWT_ACCESS_COOKIE_NAME, access_token, max_age=10800)
 
         return {"message": "User updated successfully", "data": user}
+
+    async def delete_user(self, user_id: int):
+        user = await self.users_repo.find_one(id=user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        stmt = await self.users_repo.remove_one(obj_id=user_id)
+        if not stmt:
+            return {"message": "Internal server error"}
+
+        return {"message": "User deleted successfully"}
+
+    async def send_forgot_to_email_async(self, email: str, token: str):
+        try:
+            await send_new_pass(email, token)
+            logger.info(f"Forgot password email successfully sent to {email}")
+        except Exception as e:
+            logger.error(f"Failed to send forgot password email to {email}: {e}")
