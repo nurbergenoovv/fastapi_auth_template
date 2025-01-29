@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String
+from sqlalchemy.orm import relationship
 from app.db.database import Base
 from app.schemas.auth import UserSchema
 
@@ -12,6 +13,25 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     password = Column(String)
     reset_token = Column(String, unique=True, index=True, nullable=True)
+
+    created_tasks = relationship(
+        "Task",
+        back_populates="creator",
+        foreign_keys="[Task.created_by]",
+        cascade="all, delete"
+    )
+    assigned_tasks = relationship(
+        "Task",
+        back_populates="assignee",
+        foreign_keys="[Task.assigned_to]",
+        cascade="all, delete"
+    )
+    updated_tasks = relationship(
+        "Task",
+        back_populates="updater",
+        foreign_keys="[Task.update_by]",
+        cascade="all, delete"
+    )
 
     def to_read_model(self) -> UserSchema:
         return UserSchema(

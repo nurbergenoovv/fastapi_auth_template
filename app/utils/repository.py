@@ -30,6 +30,10 @@ class AbstractRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def find_all_by_column(self, **filters) -> List[Any]:
+        raise NotImplementedError
+
+    @abstractmethod
     async def find_one(self, **filters) -> Optional[Any]:
         """Найти одну запись по фильтрам. Вернуть None, если не найдено."""
         raise NotImplementedError
@@ -159,6 +163,12 @@ class SQLAlchemyRepository(AbstractRepository):
 
     async def find_all(self) -> List[Any]:
         stmt = select(self.model)
+        res = await self.session.execute(stmt)
+        rows = res.scalars().all()
+        return [self._to_dto(row) for row in rows]
+
+    async def find_all_by_column(self, **filters) -> List[Any]:
+        stmt = select(self.model).filter_by(**filters)
         res = await self.session.execute(stmt)
         rows = res.scalars().all()
         return [self._to_dto(row) for row in rows]

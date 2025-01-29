@@ -10,7 +10,7 @@ from app.services.mail import send_new_pass
 from app.utils.config import JWT_SECRET_KEY
 from app.utils.repository import AbstractRepository
 from authx import AuthX, AuthXConfig, RequestToken
-
+import asyncio
 
 logger = logging.getLogger(__name__)
 logger.name = "Auth-Service"
@@ -98,19 +98,20 @@ class AuthService:
             "last_name": payload['last_name'],
         }
 
-    async def forgot_pass(self, crds: ForgetPasswordRequest, backgroundTask: BackgroundTasks):
+    async def forgot_pass(self, crds: ForgetPasswordRequest):
         email = crds.email
         user = await self.users_repo.find_one(email=email)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
         token = create_token()
+        print(token)
         stmt = await self.users_repo.update_one(obj_id=user.id, data={"reset_token": token})
 
         if not stmt:
             return {"message": "Internal server error"}
 
-        backgroundTask.add_task(send_new_pass, email, token)
+        asyncio.create_task(send_new_pass(email, token))
 
         return {"message": "Token created and message sent to email"}
 
@@ -163,3 +164,9 @@ class AuthService:
             logger.info(f"Forgot password email successfully sent to {email}")
         except Exception as e:
             logger.error(f"Failed to send forgot password email to {email}: {e}")
+
+    async def find_by_id(self, id: int):
+        user = await self.users_repo.find_one(id=id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return user
