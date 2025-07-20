@@ -27,11 +27,3 @@ app.include_router(API_ROUTER)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-@app.get("/")
-async def root():
-    return {"message": "Hello World"}
-
-
-if __name__ == "__main__":
-    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
