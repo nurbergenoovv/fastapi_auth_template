@@ -1,4 +1,3 @@
-import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Response, Request
@@ -13,37 +12,36 @@ from app.schemas.auth import (
     UserUpdate
 )
 from app.services.auth import AuthService
+from fastapi.security import OAuth2PasswordBearer
+from app.extensions.rate_limiter import limiter
+
 
 router = APIRouter(
     prefix="/auth",
     tags=["Auth"],
     responses={404: {"description": "Not found"}},
 )
-
-logger = logging.getLogger(__name__)
-logger.name = "Auth-Router"
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 @router.get("/")
 async def get_all(
         users_service: Annotated[AuthService, Depends(auth_service)],
-        request: Request
+        token: Annotated[str, Depends(oauth2_scheme)]
 ):
-    logger.info(f"{request.client.host} | Получение всех пользователей")
-    users = await users_service.get_users()
+    users = await users_service.get_users(token)
     return users
 
 @router.post("/")
 async def create_user(
         crds: UserCreate,
         users_service: Annotated[AuthService, Depends(auth_service)],
-        response: Response,
-        request: Request
+        response: Response
 ):
-    user_id = await users_service.add_user(crds, response)
-    logger.info(f"{request.client.host} | Создан пользователь с email {crds.email}")
-    return {"user_id": user_id}
+    access_token = await users_service.add_user(crds, response)
+    return {"access_token": access_token}
 
 @router.post("/login")
+@limiter.limit("1/2 second")
 async def login(
         crds: UserLogin,
         users_service: Annotated[AuthService, Depends(auth_service)],
@@ -51,30 +49,25 @@ async def login(
         request: Request
 ):
     try:
-        user_id = await users_service.user_login(crds, response)
-        logger.info(f"{request.client.host} | Вход пользователя с email {crds.email}")
-        return {"user_id": user_id}
+        token = await users_service.user_login(crds, response)
+        return {"access_token": token}
     except Exception as e:
-        logger.error(f"{request.client.host} | Ошибка при входе пользователя с email {crds.email}: {e}")
-        raise e  # Или верните соответствующий ответ
+        raise e
 
-@router.get("/logout")
-async def logout(
-        users_service: Annotated[AuthService, Depends(auth_service)],
-        response: Response,
-        request: Request
-):
-    logger.info(f"{request.client.host} | Выход пользователя")
-    return await users_service.logout(response)
-
-@router.post("/current_user")
+@router.post("/me")
 async def me(
         users_service: Annotated[AuthService, Depends(auth_service)],
-        request: Request,
+        token: Annotated[str, Depends(oauth2_scheme)]
 ):
-    user = await users_service.get_current_user(request)
-    logger.info(f"{request.client.host} | Получение информации о пользователе с id {user['id']}")
+    user = await users_service.get_current_user(token)
     return user
+
+@router.get("/activate/{user_id}")
+async def activate_user(
+        users_service: Annotated[AuthService, Depends(auth_service)],
+        user_id: int
+):
+    return await users_service.activate_user(user_id)
 
 @router.put('/{user_id}')
 async def update_user(
@@ -82,27 +75,22 @@ async def update_user(
         user_id: int,
         crds: UserUpdate,
         response: Response,
-        request: Request
 ):
     result = await users_service.update_user(user_id, crds, response)
-    logger.info(f"{request.client.host} | Обновление информации пользователя с email {crds.email}")
     return result
 
 @router.post("/forgot_password")
 async def forget_password(
         users_service: Annotated[AuthService, Depends(auth_service)],
         crds: ForgetPasswordRequest,
-        request: Request
 ):
     result = await users_service.forgot_pass(crds)
-    logger.info(f"{request.client.host} | Запрос сброса пароля для пользователя с email {crds.email}")
     return result
 
 @router.post("/reset_password")
 async def reset_password(
         users_service: Annotated[AuthService, Depends(auth_service)],
         crds: ResetPasswordRequest,
-        request: Request
 ):
     result = await users_service.reset_password(crds)
     return result
@@ -111,8 +99,7 @@ async def reset_password(
 async def delete_user(
         users_service: Annotated[AuthService, Depends(auth_service)],
         user_id: int,
-        request: Request
 ):
     result = await users_service.delete_user(user_id)
-    logger.info(f"{request.client.host} | Удаление пользователя с id {user_id}")
     return result
+

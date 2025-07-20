@@ -4,28 +4,28 @@ from pydantic import BaseModel
 
 class UserSchema(BaseModel):
     id: int
-    first_name: str
-    last_name: str
+    username: str
     email: str
     password: Optional[str] = None
+    is_activated: Optional[bool] = False
     class Config:
         from_attributes = True
 
 
 class UserCreate(BaseModel):
-    first_name: str
-    last_name: str
+    username: str
     email: str
     password: str
+    role: Optional[str] = "user"
 
 class UserLogin(BaseModel):
-    email: str
+    username: str
     password: str
 
 class UserOut(BaseModel):
     id: int
-    first_name: str
-    last_name: str
+    username: str
+    is_activated: bool
     email: str
     class Config:
         from_attributes = True
@@ -38,6 +38,10 @@ class ResetPasswordRequest(BaseModel):
     new_password: str
 
 class UserUpdate(BaseModel):
-    first_name: str
-    last_name: str
+    username: str
+    password: str
     email: str
+    role: Optional[str] = "user"
+
+class Activation(BaseModel):
+    token: str
